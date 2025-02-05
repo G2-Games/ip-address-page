@@ -1,0 +1,22 @@
+html {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+body {
+    display: unset;
+    height: unset;
+}
+
+h1 {
+    font-family: sans-serif;
+}
+
+p {
+    display: block;
+    width: fit-content;
+    margin: auto;
+    font-family: sans-serif;
+}
