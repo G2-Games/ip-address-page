@@ -1,59 +1,58 @@
-use rocket::{outcome::Outcome, request::{self, FromRequest, Request}, response::content::RawCss};
 use maud::{html, Markup};
+use axum::{
+    extract::Request, http::{HeaderMap, HeaderName, HeaderValue, StatusCode}, routing::get, Router
+};
 
-#[macro_use] extern crate rocket;
+#[tokio::main]
+async fn main() {
+    let ip = Router::new()
+        .route("/", get(get_ip))
+        .route("/pretty", get(get_ip_pretty))
+        .route("/stylesheet.css", get(stylesheet));
 
-#[get("/")]
-fn ipaddr(addr: RealIP) -> String {
-    addr.0
+    let app = Router::new()
+        .nest("/ip", ip);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8990").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
-#[get("/pretty")]
-fn pretty(addr: RealIP) -> Markup {
-    html! {
+async fn get_ip(req: Request) -> Result<String, StatusCode> {
+    let ip_addr = ip_from_header(req.headers());
+
+    if let Some(ip) = ip_addr {
+        Ok(ip.to_string())
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+async fn get_ip_pretty(req: Request) -> Result<Markup, StatusCode> {
+    let ip_addr = ip_from_header(req.headers());
+
+    Ok(html! {
         head {
             link rel="stylesheet" href="https://g2games.dev/assets/main-style.css" {}
             link rel="stylesheet" href="stylesheet.css" {}
             meta name="viewport" content="width=device-width, initial-scale=1" {}
         }
         h1 { "Your IP is:" }
-        p { (addr.0) }
+        p { (ip_addr.unwrap_or("Unknown")) }
+    })
+}
+
+fn ip_from_header(header: &HeaderMap<HeaderValue>) -> Option<&str> {
+    if let Some(h) = header.get(HeaderName::from_static("cf-connecting-ip")) {
+        Some(h.to_str().unwrap())
+    } else if let Some(h) = header.get(HeaderName::from_static("x-forwarded-for")) {
+        Some(h.to_str().unwrap())
+    } else if let Some(h) = header.get(HeaderName::from_static("x-real-ip")) {
+        Some(h.to_str().unwrap())
+    } else {
+        None
     }
 }
 
-#[get("/stylesheet.css")]
-fn style() -> RawCss<&'static str> {
-    RawCss(include_str!("style.css"))
-}
-
-#[launch]
-fn rocket() -> _ {
-    rocket::build()
-        .mount("/ip", routes![
-            ipaddr,
-            pretty,
-            style
-        ])
-}
-
-struct RealIP(String);
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for RealIP {
-    type Error = ();
-
-    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        let ip = req.remote();
-
-        if let Some(h) = req.headers().get_one("CF-Connecting-IP") {
-            Outcome::Success(RealIP(h.to_string()))
-        } else if let Some(h) = req.headers().get_one("x-forwarded-for") {
-            Outcome::Success(RealIP(h.to_string()))
-        } else if let Some(h) = ip {
-            let ip = h.ip();
-            Outcome::Success(RealIP(ip.to_string()))
-        } else {
-            Outcome::Error((rocket::http::Status::from_code(404).unwrap(), ()))
-        }
-    }
+async fn stylesheet() -> String {
+    include_str!("style.css").to_string()
 }

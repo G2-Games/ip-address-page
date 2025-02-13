@@ -4,5 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-maud = { version = "0.27.0", features = ["rocket"] }
-rocket = "0.5.1"
+axum = { version = "0.8.1", features = [] }
+maud = { version = "0.27.0", features = ["axum"] }
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+opt-level = "z"  # Optimize for size.
+lto = true
+codegen-units = 1
+panic = "abort"
